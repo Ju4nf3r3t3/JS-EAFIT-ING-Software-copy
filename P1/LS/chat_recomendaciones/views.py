@@ -1,35 +1,38 @@
-import requests
-import json
-import base64
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.conf import settings
 from django.views.decorators.http import require_POST
+from django.conf import settings
+import base64
+import requests
+import json
+
+# Importamos el servicio y la estrategia
+from .recommendation_service import RecommendationService
+from .strategies.huggingface_strategy import HuggingFaceStrategy
+
 
 @csrf_exempt
 @require_POST
 def chat_ia(request):
-    """Endpoint mejorado para el chat de recomendaciones"""
+    """
+    Endpoint que recibe una descripción y devuelve una recomendación de producto e imagen
+    usando el patrón Strategy para la recomendación.
+    """
     try:
-        data = json.loads(request.body)
-        descripcion = data.get("descripcion", "").strip()
-        
-        if len(descripcion) < 3:
-            return JsonResponse({
-                "error": "La descripción debe tener al menos 3 caracteres",
-                "status": "error"
-            }, status=400)
+        # Obtenemos el mensaje del usuario
+        descripcion = request.POST.get("message")
 
-        # 1. Primero generamos la recomendación de texto
-        recomendacion = generar_recomendacion(descripcion)
-        
-        # 2. Si hay recomendación válida, generamos imagen
+        # --- 1. Usamos el Strategy para generar la recomendación ---
+        service = RecommendationService(HuggingFaceStrategy())
+        recomendacion = service.recomendar(descripcion)
+
+        # --- 2. Si hay recomendación válida, generamos la imagen ---
         imagen_b64 = None
         if recomendacion and "No encontré" not in recomendacion:
-            # Extraemos solo el nombre del producto (antes de los dos puntos)
             producto_nombre = recomendacion.split(":")[0].strip()
             imagen_b64 = generar_imagen(producto_nombre)
-        
+
+        # --- 3. Respuesta JSON ---
         return JsonResponse({
             "producto": recomendacion,
             "imagen": imagen_b64,
@@ -45,51 +48,14 @@ def chat_ia(request):
             "status": "error"
         }, status=500)
 
-def generar_recomendacion(descripcion):
-    """Genera recomendaciones usando un modelo accesible"""
-    url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
-    headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_API_KEY}"}
-
-    prompt = f"""Eres un experto en recomendaciones de productos para estudiantes universitarios. 
-Responde ÚNICAMENTE con el formato: "Nombre del producto: breve descripción (máximo 8 palabras)"
-
-Ejemplo: "Cuaderno profesional: 200 hojas con espiral metálico"
-
-Usuario: {descripcion}
-Asistente:"""
-
-    data = {
-        "inputs": prompt,
-        "parameters": {
-            "temperature": 0.7,
-            "max_new_tokens": 50,
-            "do_sample": True
-        }
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=25)
-        
-        if response.status_code == 200:
-            resultado = response.json()
-            if isinstance(resultado, list) and resultado:
-                texto = resultado[0].get('generated_text', '')
-                # Limpieza de la respuesta
-                if "Asistente:" in texto:
-                    return texto.split("Asistente:")[1].strip().strip('"')
-                return texto.strip().strip('"')
-        
-        return "No encontré productos. Por favor describe mejor lo que necesitas."
-    
-    except Exception as e:
-        print(f"Error en generación: {str(e)}")
-        return "El servicio de recomendaciones no está disponible temporalmente."
 
 def generar_imagen(producto_nombre):
-    """Genera imágenes usando SDXL con manejo de errores"""
+    """
+    Genera imágenes usando SDXL con manejo de errores
+    """
     url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
     headers = {"Authorization": f"Bearer {settings.HUGGINGFACE_API_KEY}"}
-    
+
     prompt = f"Fotografía profesional de {producto_nombre}, fondo blanco, estilo e-commerce, alta calidad, 4k"
 
     try:
@@ -106,13 +72,13 @@ def generar_imagen(producto_nombre):
             },
             timeout=30
         )
-        
+
         if response.status_code == 200:
             return base64.b64encode(response.content).decode('utf-8')
-        
+
         print(f"Error en imagen: {response.status_code} - {response.text}")
         return None
-    
+
     except Exception as e:
         print(f"Error en generación de imagen: {str(e)}")
         return None

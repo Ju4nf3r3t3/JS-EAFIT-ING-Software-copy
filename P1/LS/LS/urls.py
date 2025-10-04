@@ -21,11 +21,13 @@ from django.conf.urls.static import static  # Faltaba importar esto
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('landing.urls')), 
-    path('search/', include('search.urls')), 
+    path('', include('landing.urls')),
+    path('search/', include('search.urls')),
     path("recomendaciones/", include("chat_recomendaciones.urls")),
+    path('productos/', include('productos.urls')),
 ]
 
 # Servir archivos de la carpeta media en desarrollo
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.MEDIA_URL,
+                          document_root=settings.MEDIA_ROOT)
