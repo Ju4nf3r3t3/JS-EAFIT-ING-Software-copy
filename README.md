@@ -462,5 +462,7 @@ urlpatterns = [
 
 
 
+La implementación de un sistema de reseñas y calificaciones fortalece el proyecto al incrementar la confianza, mejorar la experiencia de usuario y dar mayor visibilidad a la calidad de los productos. La elección de patrones de diseño como MVC, Observer y Strategy asegura un desarrollo flexible, escalable y mantenible en el tiempo.
+
 
 
